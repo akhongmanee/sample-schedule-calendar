@@ -817,7 +817,7 @@
                 try {
                     finalConfig = JSON.parse(__firebase_config);
                     isCanvasEnv = true;
-                    appId = typeof __app_id !== 'undefined' ? 'default-app-id' : finalConfig.projectId;
+                    appId = typeof __app_id !== 'undefined' ? __app_id : finalConfig.projectId; // Corrected appId logic
                 } catch (e) {
                     console.warn("Could not parse __firebase_config, falling back to user config.");
                     finalConfig = userFirebaseConfig;
@@ -833,34 +833,35 @@
                 db = getFirestore(app);
                 auth = getAuth(app);
                 
+                let authPromise;
                 if (isCanvasEnv && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
+                    authPromise = signInWithCustomToken(auth, __initial_auth_token);
                 } else {
-                    await signInAnonymously(auth);
+                    authPromise = signInAnonymously(auth);
                 }
-                
-                onAuthStateChanged(auth, user => {
-                    if (user) {
-                        console.log("Firebase Authenticated. User:", user.uid);
-                        const eventsCollectionRef = collection(db, `artifacts/${appId}/public/data/events`);
-                        onSnapshot(eventsCollectionRef, (snapshot) => {
-                            samples = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                            renderAll();
-                        }, (error) => console.error("Error with events listener:", error));
 
-                        const labelsDocRef = doc(db, `artifacts/${appId}/public/data/settings`, "labels");
-                        onSnapshot(labelsDocRef, (doc) => {
-                            if (doc.exists()) {
-                                colorLabels = doc.data();
-                            } else {
-                                let i = 1;
-                                Object.keys(colorPalette).forEach(color => { colorLabels[color] = `Category ${i++}`; });
-                                saveLabels();
-                            }
-                            renderAll();
-                        }, (error) => console.error("Error with labels listener:", error));
+                await authPromise;
+                console.log("Firebase Authenticated. User:", auth.currentUser.uid);
+
+                // Setup listeners after a user is confirmed
+                const eventsCollectionRef = collection(db, `artifacts/${appId}/public/data/events`);
+                onSnapshot(eventsCollectionRef, (snapshot) => {
+                    samples = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderAll();
+                }, (error) => console.error("Error with events listener:", error));
+
+                const labelsDocRef = doc(db, `artifacts/${appId}/public/data/settings`, "labels");
+                onSnapshot(labelsDocRef, (doc) => {
+                    if (doc.exists()) {
+                        colorLabels = doc.data();
+                    } else {
+                        let i = 1;
+                        Object.keys(colorPalette).forEach(color => { colorLabels[color] = `Category ${i++}`; });
+                        saveLabels();
                     }
-                });
+                    renderAll();
+                }, (error) => console.error("Error with labels listener:", error));
+
             } catch (e) {
                 console.error("Firebase initialization failed.", e);
                 db = null;
