@@ -40,7 +40,18 @@
 </head>
 <body class="bg-gray-100 text-gray-800">
 
-    <div class="container mx-auto p-4 md:p-8">
+    <!-- Loading Indicator -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50">
+        <div class="text-center">
+            <svg class="animate-spin h-8 w-8 text-blue-500 mx-auto mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="text-lg font-medium text-gray-700">Connecting to database...</p>
+        </div>
+    </div>
+
+    <div id="appContainer" class="container mx-auto p-4 md:p-8 opacity-0 transition-opacity duration-300">
         <header class="text-center mb-8">
             <h1 id="mainHeader" class="text-3xl md:text-4xl font-bold text-gray-900">Monthly Sample Schedule</h1>
             <p class="text-md text-gray-600 mt-2">Visualize your sample collection timeline</p>
@@ -209,6 +220,8 @@
             lime:   { bg: 'bg-lime-100',   border: 'border-lime-500',   text: 'text-lime-800',   dot: 'bg-lime-500'   }
         };
 
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const appContainer = document.getElementById('appContainer');
         const mainHeader = document.getElementById('mainHeader');
         const calendarGrid = document.getElementById('calendarGrid');
         const dateDisplayEl = document.getElementById('dateDisplay');
@@ -755,7 +768,7 @@
         function initializeCalendar() {
              // --- EVENT LISTENERS ---
             prevBtn.addEventListener('click', () => { 
-                if (currentView === 'month') { currentDate.setMonth(currentView.getMonth() - 1); } 
+                if (currentView === 'month') { currentDate.setMonth(currentDate.getMonth() - 1); } 
                 else { currentDate.setDate(currentDate.getDate() - 7); }
                 renderCalendar(); 
             });
@@ -819,11 +832,19 @@
                     isCanvasEnv = true;
                     appId = typeof __app_id !== 'undefined' ? __app_id : finalConfig.projectId;
                 } catch (e) {
-                    console.warn("Could not parse __firebase_config, falling back to user config.");
                     finalConfig = userFirebaseConfig;
                     appId = finalConfig.projectId;
                 }
             } else {
+                const userFirebaseConfig = {
+                    apiKey: "AIzaSyC2DPrdzoM-qZTRHRnXwSIQDJ47vUwPYTo",
+                    authDomain: "sample-8778d.firebaseapp.com",
+                    projectId: "sample-8778d",
+                    storageBucket: "sample-8778d.appspot.com",
+                    messagingSenderId: "977387822677",
+                    appId: "1:977387822677:web:adc6118c5cf485c4077edc",
+                    measurementId: "G-07P96JMVMJ"
+                };
                 finalConfig = userFirebaseConfig;
                 appId = finalConfig.projectId;
             }
@@ -832,12 +853,6 @@
                 const app = initializeApp(finalConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
-                
-                if (isCanvasEnv && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
                 
                 onAuthStateChanged(auth, user => {
                     if (user) {
@@ -863,13 +878,26 @@
                         
                         // Initialize the rest of the calendar UI now that we are connected
                         initializeCalendar();
+                        loadingOverlay.classList.add('opacity-0');
+                        setTimeout(() => loadingOverlay.style.display = 'none', 300);
+                        appContainer.classList.remove('opacity-0');
+
+                    } else {
+                        // If no user, sign in. The onAuthStateChanged will run again.
+                        if (isCanvasEnv && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                           signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                           signInAnonymously(auth);
+                        }
                     }
                 });
             } catch (e) {
                 console.error("Firebase initialization failed.", e);
                 db = null;
                 alert("Could not connect to the online database. Please check your Firebase configuration keys and ensure Anonymous Sign-in is enabled in your Firebase project.");
-                 // Initialize calendar with local/empty data on failure
+                loadingOverlay.classList.add('opacity-0');
+                setTimeout(() => loadingOverlay.style.display = 'none', 300);
+                appContainer.classList.remove('opacity-0');
                 initializeCalendar();
             }
         }
